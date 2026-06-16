@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Slice of Life</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a1018; font-family: sans-serif; }
+    #map { width: 100vw; height: 100vh; }
+
+    .video-window {
+      position: fixed;
+      z-index: 1000;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.7);
+      border-radius: 4px;
+      overflow: hidden;
+      background: #000;
+      min-width: 240px;
+      min-height: 135px;
+    }
+
+    .video-window:hover {
+      box-shadow: 0 12px 50px rgba(0,0,0,0.9);
+    }
+
+    .video-titlebar {
+      height: 28px;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      cursor: grab;
+      user-select: none;
+    }
+
+    .video-titlebar:active { cursor: grabbing; }
+
+    .video-titlebar span {
+      color: rgba(255,255,255,0.6);
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .video-close {
+      background: none;
+      border: none;
+      color: rgba(255,255,255,0.5);
+      cursor: pointer;
+      font-size: 14px;
+      line-height: 1;
+      padding: 0 0 0 8px;
+      flex-shrink: 0;
+    }
+
+    .video-close:hover { color: #fff; }
+
+    .video-window iframe {
+      display: block;
+      width: 100%;
+      height: calc(100% - 28px);
+      border: none;
+    }
+
+    .resize-handle {
+      position: absolute;
+      bottom: 0;
+      right: 0;
+      width: 16px;
+      height: 16px;
+      cursor: se-resize;
+      background: linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.2) 50%);
+      z-index: 3;
+    }
+
+    .video-blocker {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 80px;
+      z-index: 2;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+
+    const map = L.map('map', {
+      center: [48, 15],
+      zoom: 5
+    });
+
+    L.tileLayer(
+      'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      { attribution: 'Tiles © Esri', maxZoom: 19 }
+    ).addTo(map);
+
+    // Pins aus pins.json laden
+    fetch('pins.json')
+      .then(res => res.json())
+      .then(pins => {
+        pins.forEach(pin => {
+          const marker = L.marker([pin.lat, pin.lng]).addTo(map);
+
+          marker.bindTooltip(pin.location, {
+            permanent: false,
+            direction: 'top',
+            offset: [-15, -15],
+          });
+
+          marker.on('click', () => {
+            marker.openTooltip();
+            openVideo(pin);
+          });
+        });
+      });
+
+    map.on('click', () => {
+      map.eachLayer(layer => {
+        if (layer.closeTooltip) layer.closeTooltip();
+      });
+    });
+
+    let topZ = 1000;
+    let windowCount = 0;
+
+    function bringToFront(el) {
+      topZ++;
+      el.style.zIndex = topZ;
+    }
+
+    function openVideo(pin) {
+      windowCount++;
+
+      const offsetX = 32 + (windowCount % 6) * 24;
+      const offsetY = 32 + (windowCount % 6) * 24;
+
+      const win = document.createElement('div');
+      win.className = 'video-window';
+      win.style.width  = '480px';
+      win.style.height = '298px';
+      win.style.left   = offsetX + 'px';
+      win.style.top    = offsetY + 'px';
+
+      win.innerHTML = `
+        <div class="video-titlebar">
+          <span>${pin.location}</span>
+          <button class="video-close">✕</button>
+        </div>
+        <iframe
+          src="https://www.youtube.com/embed/${pin.youtubeId}?autoplay=1&controls=0&modestbranding=1&rel=0&loop=1&playlist=${pin.youtubeId}"
+          allowfullscreen
+          allow="autoplay"
+        ></iframe>
+        <div class="video-blocker"></div>
+        <div class="resize-handle"></div>
+      `;
+
+      document.body.appendChild(win);
+      bringToFront(win);
+
+      win.addEventListener('mousedown', () => bringToFront(win));
+
+      win.querySelector('.video-close').addEventListener('click', () => {
+        win.querySelector('iframe').src = '';
+        win.remove();
+      });
+
+      const titlebar = win.querySelector('.video-titlebar');
+      let isDragging = false;
+      let dragStartX, dragStartY, winStartX, winStartY;
+
+      titlebar.addEventListener('mousedown', e => {
+        isDragging = true;
+        dragStartX = e.clientX;
+        dragStartY = e.clientY;
+        winStartX  = win.offsetLeft;
+        winStartY  = win.offsetTop;
+        bringToFront(win);
+        e.preventDefault();
+      });
+
+      document.addEventListener('mousemove', e => {
+        if (!isDragging) return;
+        win.style.left = (winStartX + e.clientX - dragStartX) + 'px';
+        win.style.top  = (winStartY + e.clientY - dragStartY) + 'px';
+      });
+
+      document.addEventListener('mouseup', () => { isDragging = false; });
+
+      const handle = win.querySelector('.resize-handle');
+      let isResizing = false;
+      let resStartX, resStartY, resStartW, resStartH;
+
+      handle.addEventListener('mousedown', e => {
+        isResizing = true;
+        resStartX = e.clientX;
+        resStartY = e.clientY;
+        resStartW = win.offsetWidth;
+        resStartH = win.offsetHeight;
+        bringToFront(win);
+        e.preventDefault();
+        e.stopPropagation();
+      });
+
+      document.addEventListener('mousemove', e => {
+        if (!isResizing) return;
+        const newW = Math.max(240, resStartW + e.clientX - resStartX);
+        const newH = Math.max(163, resStartH + e.clientY - resStartY);
+        win.style.width  = newW + 'px';
+        win.style.height = newH + 'px';
+      });
+
+      document.addEventListener('mouseup', () => { isResizing = false; });
+    }
+
+  </script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+[
+  {
+    "lat": 52.52,
+    "lng": 13.405,
+    "title": "Späti um Mitternacht",
+    "location": "Berlin, Deutschland",
+    "youtubeId": "vvI5EVUjsG4"
+  },
+  {
+    "lat": 35.68,
+    "lng": 139.65,
+    "title": "Frühmorgens in Shinjuku",
+    "location": "Tokyo, Japan",
+    "youtubeId": "vvI5EVUjsG4"
+  },
+  {
+    "lat": 41.90,
+    "lng": 12.50,
+    "title": "Markt am Testaccio",
+    "location": "Rom, Italien",
+    "youtubeId": "vvI5EVUjsG4"
+  }
+]
